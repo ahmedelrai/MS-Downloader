@@ -131,7 +131,7 @@ class UpdateThread(QThread):
 	
 	def check_update(self):
 		try:
-			version = 1.1
+			version = 1.4
 			app_url = 'https://drive.google.com/uc?export=download&id=1zmYzNufhLZ1zklBgZ9IHwbrLYyj9iXV0'
 			response = requests.get("https://drive.google.com/uc?export=download&id=1_AvdEkMdpiCWXoURt02XmW4iSXpcT04Z")
 			check_version = float(response.text)
@@ -151,13 +151,13 @@ class UpdateThread(QThread):
 					if os.path.isfile(backup_path):
 						os.remove(backup_path)
 					os.rename(app_path, backup_path)
-				except OSError(errno, strerror):
-					print("Unable to rename %s to %s: (%d) %s") % (app_path, backup_path, errno, strerror)
+				except OSError as e:
+					print("Unable to rename %s to %s: (%s)") % (app_path, backup_path, e)
 
 				try:
 					os.rename(dl_path, app_path)
-				except OSError(errno, strerror):
-					print("Unable to rename %s to %s: (%d) %s" ) % (dl_path, app_path, errno, strerror)
+				except OSError as e:
+					print("Unable to rename %s to %s: (%s)") % (dl_path, app_path, e)
 
 				try:
 					import shutil
