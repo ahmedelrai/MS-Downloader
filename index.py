@@ -9,12 +9,7 @@ import requests
 import json
 import re
 import time
-import urllib
 from pathlib import Path
-import shutil
-import update_manager
-import tempfile
-import multiprocessing as mp
 
 
 #Form_Class,_ = loadUiType(os.path.join(os.path.dirname(__file__), "main.ui"))
@@ -39,6 +34,7 @@ class mainapp(QMainWindow, Ui_MainWindow):
 		self.UpdateThread = UpdateThread()
 		self.UpdateThread.error_signal.connect(self.handle_errors)
 		self.UpdateThread.msg_signal.connect(self.handle_messages)
+		self.UpdateThread.custom_msg_signal.connect(self.custom_msgBox)
 		self.UpdateThread.not_updated.connect(self.not_latest)
 		self.UpdateThread.start()
 		self.thread.urls_signal.connect(self.show_list)
@@ -106,12 +102,25 @@ class mainapp(QMainWindow, Ui_MainWindow):
 		self.progressBar.show()
 		self.label_3.show()
 		self.pushButton_6.show()
-	def exit(self):
-		sys.exit(self)
+
+	def custom_msgBox(self,content):
+		msgBox = QMessageBox()
+		msgBox.setWindowTitle(content[0])
+		msgBox.setWindowIcon(QIcon(':/assets/icon.ico'))
+		msgBox.setText(content[1])
+		yesBtn = msgBox.addButton(content[2], QMessageBox.YesRole)
+		noBtn = msgBox.addButton(content[3], QMessageBox.RejectRole)
+		msgBox.exec_()
+		
+		if msgBox.clickedButton() == yesBtn:
+			os.execl(sys.executable, os.path.abspath(__file__), *sys.argv)
+
+
 class UpdateThread(QThread):
 
 	error_signal = pyqtSignal(str,str)
 	msg_signal = pyqtSignal(str,str)
+	custom_msg_signal = pyqtSignal('QVariantList')
 	not_updated = pyqtSignal(bool)
 
 	def __init__(self,parent=None):
@@ -128,19 +137,42 @@ class UpdateThread(QThread):
 			check_version = float(response.text)
 			dl = 0
 			if check_version > version:
-				save_place = os.path.join(os.path.abspath(os.getcwd()),"MS Downloader.exe")
 				r = requests.get(app_url,stream=True)
-				f, path = tempfile.mkstemp()
-				for chunk in r.iter_content(chunk_size=1024):
-					if chunk:
-						dl += len(chunk)
-						os.write(f,chunk)
-				self.msg_signal.emit('success','Update is downloaded successfully')
-				#update_manager.apply_update(path,save_place)
-				p1 = mp.Process(target=update_manager.apply_update, args=[path,save_place])
-				p1.start()
-				sys.exit()
-				print("here")
+				app_path = os.path.realpath(sys.argv[0])
+				dl_path = app_path + ".new"
+				backup_path = app_path + ".old"
+				print(app_path,dl_path,backup_path)
+				with open(dl_path,'wb') as f:
+					for chunk in r.iter_content(chunk_size=1024):
+						if chunk:
+							dl += len(chunk)
+							f.write(chunk)
+				try:
+					if os.path.isfile(backup_path):
+						os.remove(backup_path)
+					os.rename(app_path, backup_path)
+				except OSError(errno, strerror):
+					print("Unable to rename %s to %s: (%d) %s") % (app_path, backup_path, errno, strerror)
+
+				try:
+					os.rename(dl_path, app_path)
+				except OSError(errno, strerror):
+					print("Unable to rename %s to %s: (%d) %s" ) % (dl_path, app_path, errno, strerror)
+
+				try:
+					import shutil
+					shutil.copymode(backup_path, app_path)
+				except:
+					os.chmod(app_path, 0o755)
+				
+				self.custom_msg_signal.emit(
+					[
+						'Success',
+						'Update is downloaded successfully. Do you want to restart the app now ?.',
+						'OK',
+						'Later',
+					]
+				)
 
 		except Exception as e:
 			self.error_signal.emit('Update Error',str(e))
